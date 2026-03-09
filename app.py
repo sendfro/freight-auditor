@@ -102,16 +102,43 @@ if uploaded_files:
                     for flag in audit_report["flags"]:
                         st.warning(flag)
                     
-                    # --- PHASE 3: THE VOICE ---
+                    # --- PHASE 3: THE VOICE & THE TRIGGER ---
                     st.markdown("### ✉️ Auto-Drafted Dispute Email")
+                    
+                    # Import our new mailroom
+                    from mailer import fire_dispute_email
+                    
                     with st.spinner("Drafting carrier communication..."):
                         invoice_details = {
                             "carrier_name": extracted_data.get("carrier_name", "Carrier"),
                             "invoice_number": extracted_inv_num
                         }
                         email_draft = generate_dispute_email(audit_report, invoice_details)
-                        st.text_area(f"Copy and send this to your carrier rep for {uploaded_file.name}:", value=email_draft, height=250, key=uploaded_file.name)
-
+                        
+                        # Let the human review and edit the draft if they want to!
+                        final_email_text = st.text_area(f"Review draft for {uploaded_file.name}:", value=email_draft, height=250, key=f"draft_{uploaded_file.name}")
+                        
+                        # The Trigger System
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            carrier_rep_email = st.text_input("Carrier Rep Email Address:", placeholder="rep@dhl.com", key=f"email_{uploaded_file.name}")
+                        with col2:
+                            st.write("") # Spacing
+                            st.write("") # Spacing
+                            if st.button("📨 Send Dispute Now", key=f"send_{uploaded_file.name}", type="primary"):
+                                if carrier_rep_email:
+                                    with st.spinner("Transmitting to carrier..."):
+                                        success, msg = fire_dispute_email(
+                                            carrier_email=carrier_rep_email,
+                                            subject=f"URGENT: Billing Dispute - Invoice {extracted_inv_num}",
+                                            body=final_email_text
+                                        )
+                                        if success:
+                                            st.success(msg)
+                                        else:
+                                            st.error(msg)
+                                else:
+                                    st.warning("⚠️ Please enter a carrier email address first.")
                 else:
                     st.success(f"Status: {audit_report['status']}")
                     st.info("Invoice matches target cost. Approved for payment.")
